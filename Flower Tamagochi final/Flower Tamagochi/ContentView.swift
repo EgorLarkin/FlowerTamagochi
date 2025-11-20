@@ -55,7 +55,7 @@ struct ContentView: View {
                     .offset(y: -150)
                 if chatResponse != "" || isLoading{
                     HStack{
-                        Image(systemName: "exclamationmark.brakesignal")
+                        Image(systemName: "exclamationmark.triangle.text.page")
                             .foregroundColor(.red)
                             .font(.system(size: 50))
                             .offset(y: -150)
@@ -148,7 +148,7 @@ struct ContentView: View {
     }
     func fetchChatCompletion() {
         self.isLoading = true
-        guard let url = URL(string: "https://openrouter.ai/api/v1/chat/completions") else {
+        guard let url = URL(string: "https://router.huggingface.co/v1/chat/completions") else {
             self.chatResponse = "Неверный URL"
             self.isLoading = false
             return
@@ -156,13 +156,14 @@ struct ContentView: View {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer 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", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer TOKEN", forHTTPHeaderField: "Authorization")
         let body: [String: Any] = [
-            "model": "deepseek/deepseek-chat-v3.1:free",
+            "stream": false,
+            "model": "deepseek-ai/DeepSeek-V3.2-Exp:novita",
             "messages": [
                 [
                     "role": "user",
-                    "content": "Дай ответ в одну строку, обратившись к пользователю без обращения к нему, от имени цветка, не предлагай варианты с изменением местоположения цветка, а только к его состоянию: Что нужно цветку \"роза\", который стоит в комнате при температуре \(temp ?? 0)°C, влажности воздуха \(airHumidity ?? 0)% и влажности почвы \(soilHumidity ?? 0)%?; а если цветку очень плохо, то ответь шуточно."
+                    "content": "Дай очень краткий ответ, пожалуйста. Если цветку все хорошо, обратившись к пользователю от имени цветка \(flowerName) без обращения к нему, от имени цветка, не предлагай варианты с изменением местоположения цветка, а только к его состоянию: Что нужно цветку \"роза\", который стоит в комнате при температуре \(temp ?? 0)°C, влажности воздуха \(airHumidity ?? 0)% и влажности почвы \(soilHumidity ?? 0)%?; ответь непринужденно и шуточно."
                 ]
             ]
         ]
