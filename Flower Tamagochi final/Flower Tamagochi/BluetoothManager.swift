@@ -1,5 +1,5 @@
 //
-//  BluetoothManager 2.swift
+//  BluetoothManager.swift
 //  Flower Tamagochi
 //
 //  Created by Сергей Ларкин on 24/11/2025.
