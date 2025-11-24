@@ -1,5 +1,4 @@
 import SwiftUI
-import Foundation
 
 struct ChatCompletionResponse: Codable {
     let choices: [Choice]
@@ -18,34 +17,59 @@ struct ContentView: View {
     @State private var isLoading: Bool = false
     @State private var chatRecommendation: String = ""
     @State private var chatResponse = ""
-    @State private var temp: Int?
-    @State private var airHumidity: Int?
-    @State private var soilHumidity: Int?
+    @State private var temp: Int = 0
+    @State private var airHumidity: Int = 0
+    @State private var soilHumidity: Int = 0
     @State private var showStats: Bool = false
     @State private var countEdits: Int = 0
-//    @ObservedObject var bluetoothManager = BluetoothManager()
+    @State private var showDeviceList: Bool = false
+    @StateObject private var bluetoothManager = BluetoothManager()
+    
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false){
+        ScrollView(.vertical, showsIndicators: false) {
             VStack {
-                HStack{
-                    VStack(alignment: .leading){
-                        Text("🌡️: \(temp ?? 0)°C")
+                // Статус Bluetooth
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(bluetoothManager.statusMessage)
+                            .font(.system(size: 14))
+                            .foregroundColor(bluetoothManager.isConnected ? .green : .red)
+                        
+                        if !bluetoothManager.isConnected && bluetoothManager.bluetoothState == .poweredOn {
+                            Button("Показать устройства") {
+                                showDeviceList = true
+                            }
+                            .font(.system(size: 14))
+                            .foregroundColor(.blue)
+                        }
+                    }
+                    Spacer()
+                        .offset(x: 40)
+                }
+                .padding(.horizontal)
+                .offset(x: 50)
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text("🌡️: \(temp)°C")
                             .font(.system(size: 30))
-                        Text("💧: \(airHumidity ?? 0)%")
+                        Text("💧: \(airHumidity)%")
                             .font(.system(size: 30))
-                        Text("🪴: \(soilHumidity ?? 0)%")
+                        Text("🪴: \(soilHumidity)%")
                             .font(.system(size: 30))
                     }
+                    
                     FlowMessage(message: chatRecommendation)
                         .padding()
                         .offset(x: 40)
                 }
+                
                 Image("Flower")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 400, height: 400)
                     .offset(x: -25, y: -50)
                     .padding()
+                
                 TextField("Имя цветка", text: $flowerName)
                     .multilineTextAlignment(.center)
                     .font(.title)
@@ -53,19 +77,19 @@ struct ContentView: View {
                     .padding()
                     .foregroundColor(.purple)
                     .offset(y: -150)
-                if chatResponse != "" || isLoading{
-                    HStack{
+                
+                if chatResponse != "" || isLoading {
+                    HStack {
                         Image(systemName: "exclamationmark.triangle.text.page")
                             .foregroundColor(.red)
                             .font(.system(size: 50))
                             .offset(y: -150)
-                        if isLoading{
+                        if isLoading {
                             Text("Цветочек думает...")
                                 .foregroundColor(.red)
                                 .font(.system(size: 25))
                                 .offset(y: -150)
                                 .multilineTextAlignment(.center)
-                            
                         } else {
                             Text(chatResponse)
                                 .lineLimit(nil)
@@ -77,10 +101,11 @@ struct ContentView: View {
                         }
                     }
                 }
+                
                 Button(
-                    action: {fetchChatCompletion()},
+                    action: { fetchChatCompletion() },
                     label: {
-                        Text(" Спросить  цветочек ")
+                        Text(" Спросить цветочек ")
                             .background(Color.blue)
                             .foregroundStyle(.white)
                             .font(.system(size: 30))
@@ -88,8 +113,10 @@ struct ContentView: View {
                 .cornerRadius(20)
                 .frame(width: 500)
                 .offset(y: -100)
+                
                 Button(
-                    action: {showStats = true}, label: {
+                    action: { showStats = true },
+                    label: {
                         Text(" Статистика цветочка ")
                             .background(Color.blue)
                             .foregroundStyle(.white)
@@ -105,23 +132,18 @@ struct ContentView: View {
             .onChange(of: flowerName) { newValue in
                 writeNewName()
             }
-            .sheet(isPresented: $showStats){StatsModal()}
-            .onChange(of: temp) { newValue in
-                if temp ?? 0 >= 15 && temp ?? 0 <= 25 && airHumidity ?? 0 >= 40 && airHumidity ?? 0 <= 70 && soilHumidity ?? 0 >= 20 && soilHumidity ?? 0 <= 50 {
-                    chatRecommendation = "Все хорошо!"
-                    writeNewData(
-                        temp: temp ?? 0,
-                        airHumidity: airHumidity ?? 0,
-                        soilHumidity: soilHumidity ?? 0
-                    )
-                }else{
-                    chatRecommendation = "Спаси меня!"
-                    writeNewData(
-                        temp: temp ?? 0,
-                        airHumidity: airHumidity ?? 0,
-                        soilHumidity: soilHumidity ?? 0
-                    )
-                }
+            .sheet(isPresented: $showStats) { StatsModal() }
+            .sheet(isPresented: $showDeviceList) {
+                DeviceListView(bluetoothManager: bluetoothManager)
+            }
+            .onChange(of: bluetoothManager.temperature) { newValue in
+                updateSensorValues()
+            }
+            .onChange(of: bluetoothManager.humidity) { newValue in
+                updateSensorValues()
+            }
+            .onChange(of: bluetoothManager.soilMoisture) { newValue in
+                updateSensorValues()
             }
             .onChange(of: countEdits) { newValue in
                 writeNewCount()
@@ -129,23 +151,45 @@ struct ContentView: View {
                     shrinkFile()
                     countEdits = 0
                 }
-                
             }
         }
         .onAppear() {
-            countEdits = Int(readEdits())!
+            startDataUpdate()
+            countEdits = Int(readEdits()) ?? 0
             print(countEdits)
             flowerName = readFromFile()
             writeNewData(
-                temp: temp ?? 0,
-                airHumidity: airHumidity ?? 0,
-                soilHumidity: soilHumidity ?? 0
+                temp: temp,
+                airHumidity: airHumidity,
+                soilHumidity: soilHumidity
             )
-//            bluetoothManager.centralManagerDidUpdateState(bluetoothManager.centralManager)
-//            clearFile()
+        }
+    }
+    
+    private func updateSensorValues() {
+        self.temp = Int(bluetoothManager.temperature)
+        self.airHumidity = Int(bluetoothManager.humidity)
+        self.soilHumidity = Int(bluetoothManager.soilMoisture)
+        
+        if temp >= 15 && temp <= 25 && airHumidity >= 40 && airHumidity <= 70 && soilHumidity >= 20 && soilHumidity <= 50 {
+            chatRecommendation = "Все хорошо!"
+        } else {
+            chatRecommendation = "Спаси меня!"
         }
         
+        writeNewData(
+            temp: temp,
+            airHumidity: airHumidity,
+            soilHumidity: soilHumidity
+        )
     }
+    
+    @MainActor
+    func startDataUpdate() {
+        // Данные автоматически обновляются через @Published свойства BluetoothManager
+        // и обрабатываются в onChange модификаторах
+    }
+    
     func fetchChatCompletion() {
         self.isLoading = true
         guard let url = URL(string: "https://router.huggingface.co/v1/chat/completions") else {
@@ -153,17 +197,19 @@ struct ContentView: View {
             self.isLoading = false
             return
         }
+        
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer TOKEN", forHTTPHeaderField: "Authorization")
+        
         let body: [String: Any] = [
             "stream": false,
             "model": "deepseek-ai/DeepSeek-V3.2-Exp:novita",
             "messages": [
                 [
                     "role": "user",
-                    "content": "Дай очень краткий ответ, пожалуйста. Если цветку все хорошо, обратившись к пользователю от имени цветка \(flowerName) без обращения к нему, от имени цветка, не предлагай варианты с изменением местоположения цветка, а только к его состоянию: Что нужно цветку \"роза\", который стоит в комнате при температуре \(temp ?? 0)°C, влажности воздуха \(airHumidity ?? 0)% и влажности почвы \(soilHumidity ?? 0)%?; ответь непринужденно и шуточно."
+                    "content": "Дай очень краткий ответ, пожалуйста. Если цветку все хорошо, обратившись к пользователю от имени цветка \(flowerName) без обращения к нему, от имени цветка, не предлагай варианты с изменением местоположения цветка, а только к его состоянию: Что нужно цветку \"\(flowerName)\", который стоит в комнате при температуре \(temp)°C, влажности воздуха \(airHumidity)% и влажности почвы \(soilHumidity)%?; ответь непринужденно и шуточно."
                 ]
             ]
         ]
@@ -175,6 +221,7 @@ struct ContentView: View {
         }
         
         request.httpBody = jsonData
+        
         let task = URLSession.shared.dataTask(with: request) { data, response, error in
             defer { DispatchQueue.main.async { self.isLoading = false } }
             
@@ -223,29 +270,32 @@ struct ContentView: View {
         }
         task.resume()
     }
-    func writeNewName() -> Void{
+    
+    // Остальные функции для работы с файлами остаются без изменений
+    func writeNewName() {
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let fileURL = documentsURL.appendingPathComponent("FlowerName.txt")
         do {
             try self.flowerName.write(to: fileURL, atomically: true, encoding: .utf8)
-        }catch{
+        } catch {
             print("Error write")
         }
     }
-    func writeNewCount() -> Void{
+    
+    func writeNewCount() {
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let fileURL = documentsURL.appendingPathComponent("DataCount.txt")
         do {
             try String(self.countEdits).write(to: fileURL, atomically: true, encoding: .utf8)
-        }catch{
+        } catch {
             print("Error write")
         }
     }
+    
     func readFromFile() -> String {
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let fileURL = documentsURL.appendingPathComponent("FlowerName.txt")
         
-        // Проверка существования файла
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             return "File does not exist"
         }
@@ -257,26 +307,28 @@ struct ContentView: View {
             return "Error reading file: \(error.localizedDescription)"
         }
     }
+    
     func readEdits() -> String {
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let fileURL = documentsURL.appendingPathComponent("DataCount.txt")
         
-        // Проверка существования файла
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            return "File does not exist"
+            return "0"
         }
 
         do {
             let fileContent = try String(contentsOf: fileURL, encoding: .utf8)
             return fileContent
         } catch {
-            return "Error reading file: \(error.localizedDescription)"
+            return "0"
         }
     }
-    func writeNewData(temp: Int, airHumidity: Int, soilHumidity: Int){
+    
+    func writeNewData(temp: Int, airHumidity: Int, soilHumidity: Int) {
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let addString = "\(temp), \(airHumidity), \(soilHumidity)\n"
         let fileURL = documentsURL.appendingPathComponent("FlowerData.txt")
+        
         if let fileHandle = try? FileHandle(forWritingTo: fileURL) {
             fileHandle.seekToEndOfFile()
             if let data = addString.data(using: .utf8) {
@@ -292,6 +344,7 @@ struct ContentView: View {
         }
         countEdits += 1
     }
+    
     func shrinkFile() {
         var sum_temp: Int = 0
         var sum_airHumidity: Int = 0
@@ -348,15 +401,44 @@ struct ContentView: View {
             print("Error reading/writing file: \(error.localizedDescription)")
         }
     }
-    func clearFile(){
+    
+    func clearFile() {
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let fileURL = documentsURL.appendingPathComponent("FlowerData.txt")
         do {
             try "".write(to: fileURL, atomically: true, encoding: .utf8)
             countEdits = 0
             writeNewCount()
-        }catch{
+        } catch {
             print("Error write")
+        }
+    }
+}
+
+struct DeviceListView: View {
+    @ObservedObject var bluetoothManager: BluetoothManager
+    @Environment(\.presentationMode) var presentationMode
+    
+    var body: some View {
+        NavigationView {
+            List(bluetoothManager.discoveredDevices, id: \.identifier) { device in
+                Button(action: {
+                    bluetoothManager.connectToDevice(device)
+                    presentationMode.wrappedValue.dismiss()
+                }) {
+                    VStack(alignment: .leading) {
+                        Text(device.name ?? "Unknown Device")
+                            .font(.headline)
+                        Text(device.identifier.uuidString)
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+            .navigationTitle("Выберите устройство")
+            .navigationBarItems(trailing: Button("Закрыть") {
+                presentationMode.wrappedValue.dismiss()
+            })
         }
     }
 }
