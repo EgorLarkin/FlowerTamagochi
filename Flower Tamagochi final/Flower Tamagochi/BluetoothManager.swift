@@ -16,7 +16,6 @@ class BluetoothManager: NSObject, ObservableObject {
     private var connectedPeripheral: CBPeripheral?
     private var targetCharacteristic: CBCharacteristic?
     
-    // UUID из вашего кода ESP32
     let serviceUUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c331914b")
     let characteristicUUID = CBUUID(string: "beb5483e-36e1-4688-b7f5-ea07361b26a8")
     
@@ -25,7 +24,6 @@ class BluetoothManager: NSObject, ObservableObject {
     @Published var statusMessage = "Инициализация Bluetooth..."
     @Published var bluetoothState: CBManagerState = .unknown
     
-    // Переменные для данных с датчиков
     @Published var temperature: Float = 0.0
     @Published var humidity: Float = 0.0
     @Published var soilMoisture: Float = 0.0
