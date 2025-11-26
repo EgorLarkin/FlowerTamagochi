@@ -25,23 +25,22 @@ struct ContentView: View {
     @State private var showDeviceList: Bool = false
     @StateObject private var bluetoothManager = BluetoothManager()
     
+    @State private var deviceName: String = ""
+    
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack {
-                // Статус Bluetooth
                 HStack {
                     VStack(alignment: .leading) {
                         Text(bluetoothManager.statusMessage)
                             .font(.system(size: 14))
                             .foregroundColor(bluetoothManager.isConnected ? .green : .red)
                         
-                        if !bluetoothManager.isConnected && bluetoothManager.bluetoothState == .poweredOn {
-                            Button("Показать устройства") {
-                                showDeviceList = true
-                            }
-                            .font(.system(size: 14))
-                            .foregroundColor(.blue)
+                        Button("Показать устройства") {
+                            showDeviceList = true
                         }
+                        .font(.system(size: 14))
+                        .foregroundColor(.blue)
                     }
                     Spacer()
                         .offset(x: 40)
@@ -135,15 +134,28 @@ struct ContentView: View {
             .sheet(isPresented: $showStats) { StatsModal() }
             .sheet(isPresented: $showDeviceList) {
                 DeviceListView(bluetoothManager: bluetoothManager)
+                
             }
             .onChange(of: bluetoothManager.temperature) { newValue in
                 updateSensorValues()
+                if updateDevName() {
+                    self.flowerName = readFromFile()
+                }
+                print(deviceName)
             }
             .onChange(of: bluetoothManager.humidity) { newValue in
                 updateSensorValues()
+                if updateDevName() {
+                    self.flowerName = readFromFile()
+                }
+                print(deviceName)
             }
             .onChange(of: bluetoothManager.soilMoisture) { newValue in
                 updateSensorValues()
+                if updateDevName() {
+                    self.flowerName = readFromFile()
+                }
+                print(deviceName)
             }
             .onChange(of: countEdits) { newValue in
                 writeNewCount()
@@ -152,12 +164,14 @@ struct ContentView: View {
                     countEdits = 0
                 }
             }
+            .onChange(of: deviceName){ newValue in
+                print(deviceName)
+            }
         }
         .onAppear() {
             startDataUpdate()
             countEdits = Int(readEdits()) ?? 0
             print(countEdits)
-            flowerName = readFromFile()
             writeNewData(
                 temp: temp,
                 airHumidity: airHumidity,
@@ -184,11 +198,14 @@ struct ContentView: View {
         )
     }
     
-    @MainActor
-    func startDataUpdate() {
-        // Данные автоматически обновляются через @Published свойства BluetoothManager
-        // и обрабатываются в onChange модификаторах
+    private func updateDevName() -> Bool{
+        let oldName = self.deviceName
+        self.deviceName = bluetoothManager.deviceName
+        return oldName != self.deviceName
     }
+    
+    @MainActor
+    func startDataUpdate() {}
     
     func fetchChatCompletion() {
         self.isLoading = true
@@ -271,10 +288,11 @@ struct ContentView: View {
         task.resume()
     }
     
-    // Остальные функции для работы с файлами остаются без изменений
     func writeNewName() {
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let fileURL = documentsURL.appendingPathComponent("FlowerName.txt")
+        let fileURL = documentsURL.appendingPathComponent(
+            self.deviceName + "FlowerName.txt"
+        )
         do {
             try self.flowerName.write(to: fileURL, atomically: true, encoding: .utf8)
         } catch {
@@ -284,7 +302,7 @@ struct ContentView: View {
     
     func writeNewCount() {
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let fileURL = documentsURL.appendingPathComponent("DataCount.txt")
+        let fileURL = documentsURL.appendingPathComponent(self.deviceName + "DataCount.txt")
         do {
             try String(self.countEdits).write(to: fileURL, atomically: true, encoding: .utf8)
         } catch {
@@ -294,7 +312,7 @@ struct ContentView: View {
     
     func readFromFile() -> String {
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let fileURL = documentsURL.appendingPathComponent("FlowerName.txt")
+        let fileURL = documentsURL.appendingPathComponent((self.deviceName + "FlowerName.txt"))
         
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             return "File does not exist"
@@ -310,7 +328,7 @@ struct ContentView: View {
     
     func readEdits() -> String {
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let fileURL = documentsURL.appendingPathComponent("DataCount.txt")
+        let fileURL = documentsURL.appendingPathComponent(self.deviceName + "DataCount.txt")
         
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             return "0"
@@ -327,7 +345,7 @@ struct ContentView: View {
     func writeNewData(temp: Int, airHumidity: Int, soilHumidity: Int) {
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let addString = "\(temp), \(airHumidity), \(soilHumidity)\n"
-        let fileURL = documentsURL.appendingPathComponent("FlowerData.txt")
+        let fileURL = documentsURL.appendingPathComponent(self.deviceName + "FlowerData.txt")
         
         if let fileHandle = try? FileHandle(forWritingTo: fileURL) {
             fileHandle.seekToEndOfFile()
@@ -352,7 +370,7 @@ struct ContentView: View {
         var dataArray: [String] = []
         
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let fileURL = documentsURL.appendingPathComponent("FlowerData.txt")
+        let fileURL = documentsURL.appendingPathComponent(self.deviceName + "FlowerData.txt")
         
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             print("File does not exist")
@@ -404,7 +422,7 @@ struct ContentView: View {
     
     func clearFile() {
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let fileURL = documentsURL.appendingPathComponent("FlowerData.txt")
+        let fileURL = documentsURL.appendingPathComponent(self.deviceName + "FlowerData.txt")
         do {
             try "".write(to: fileURL, atomically: true, encoding: .utf8)
             countEdits = 0
@@ -418,6 +436,7 @@ struct ContentView: View {
 struct DeviceListView: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @Environment(\.presentationMode) var presentationMode
+    @State private var name: String = ""
     
     var body: some View {
         NavigationView {
