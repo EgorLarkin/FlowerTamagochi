@@ -1,11 +1,3 @@
-//
-//  BluetoothManager 2.swift
-//  Flower Tamagochi
-//
-//  Created by Сергей Ларкин on 24/11/2025.
-//
-
-
 import Foundation
 import CoreBluetooth
 import Combine
@@ -16,7 +8,6 @@ class BluetoothManager: NSObject, ObservableObject {
     private var connectedPeripheral: CBPeripheral?
     private var targetCharacteristic: CBCharacteristic?
     
-    // UUID из вашего кода ESP32
     let serviceUUID = CBUUID(string: "4fafc201-1fb5-459e-8fcc-c5c9c331914b")
     let characteristicUUID = CBUUID(string: "beb5483e-36e1-4688-b7f5-ea07361b26a8")
     
@@ -24,8 +15,8 @@ class BluetoothManager: NSObject, ObservableObject {
     @Published var isConnected = false
     @Published var statusMessage = "Инициализация Bluetooth..."
     @Published var bluetoothState: CBManagerState = .unknown
+    @Published var deviceName: String = ""
     
-    // Переменные для данных с датчиков
     @Published var temperature: Float = 0.0
     @Published var humidity: Float = 0.0
     @Published var soilMoisture: Float = 0.0
@@ -44,7 +35,6 @@ class BluetoothManager: NSObject, ObservableObject {
         
         discoveredDevices.removeAll()
         
-        // Сканируем устройства с нашим сервисом
         centralManager.scanForPeripherals(withServices: [serviceUUID], options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
         statusMessage = "Поиск устройств ESP32..."
         print("Начато сканирование BLE устройств")
@@ -62,12 +52,14 @@ class BluetoothManager: NSObject, ObservableObject {
         centralManager.connect(device, options: nil)
         statusMessage = "Подключение к \(device.name ?? "устройству")..."
         print("Подключаемся к устройству: \(device.name ?? "Unknown")")
+        self.deviceName = device.name ?? "Unknown Device" // Сохраняем имя устройства
     }
     
     func disconnect() {
         if let peripheral = connectedPeripheral {
             centralManager.cancelPeripheralConnection(peripheral)
             print("Отключение от устройства")
+            self.deviceName = "" // Очищаем имя при отключении
         }
     }
     
@@ -174,6 +166,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
                 print("Bluetooth выключен")
                 self.isConnected = false
                 self.discoveredDevices.removeAll()
+                self.deviceName = "" // Очищаем имя при выключении Bluetooth
             case .unauthorized:
                 print("Нет разрешения на Bluetooth")
             case .unsupported:
@@ -204,7 +197,8 @@ extension BluetoothManager: CBCentralManagerDelegate {
         DispatchQueue.main.async {
             print("Успешно подключено к: \(peripheral.name ?? "Unknown")")
             self.isConnected = true
-            self.statusMessage = "Подключено к ESP32"
+            self.deviceName = peripheral.name ?? "Unknown Device" // Сохраняем имя при подключении
+            self.statusMessage = "Подключено к \(self.deviceName)"
             peripheral.delegate = self
             
             // Ищем только наш сервис
@@ -221,8 +215,9 @@ extension BluetoothManager: CBCentralManagerDelegate {
             }
             
             self.isConnected = false
-            self.statusMessage = "ESP32 отключен"
+            self.statusMessage = "\(self.deviceName) отключен"
             self.targetCharacteristic = nil
+            self.deviceName = "" // Очищаем имя при отключении
             
             // Перезапускаем сканирование через 2 секунды
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -313,7 +308,7 @@ extension BluetoothManager: CBPeripheralDelegate {
         let message = String(data: data, encoding: .utf8) ?? "Нечитаемые данные"
         
         DispatchQueue.main.async {
-            print("Получены данные от ESP32: \(message)")
+            print("Получены данные от \(self.deviceName): \(message)")
             
             // Парсим данные с датчиков
             self.parseSensorData(message)
@@ -328,4 +323,3 @@ extension BluetoothManager: CBPeripheralDelegate {
         }
     }
 }
-
