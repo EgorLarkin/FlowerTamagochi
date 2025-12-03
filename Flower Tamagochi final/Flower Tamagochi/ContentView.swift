@@ -194,7 +194,7 @@ struct ContentView: View {
             }
             .onChange(of: countEdits) { newValue in
                 writeNewCount()
-                if countEdits >= 10 {
+                if countEdits >= 10000 {
                     shrinkFile()
                     countEdits = 0
                 }
