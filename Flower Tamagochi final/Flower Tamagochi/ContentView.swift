@@ -20,6 +20,7 @@ struct ContentView: View {
     @State private var temp: Int = 0
     @State private var airHumidity: Int = 0
     @State private var soilHumidity: Int = 0
+    @State private var lightLevel: Int = 0
     @State private var showStats: Bool = false
     @State private var countEdits: Int = 0
     @State private var showDeviceList: Bool = false
@@ -28,110 +29,121 @@ struct ContentView: View {
     @State private var deviceName: String = ""
     
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack {
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(bluetoothManager.statusMessage)
-                            .font(.system(size: 14))
-                            .foregroundColor(bluetoothManager.isConnected ? .green : .red)
-                        
-                        Button("Показать устройства") {
-                            showDeviceList = true
-                        }
+        VStack {
+            HStack {
+                VStack(alignment: .leading) {
+                    Text(bluetoothManager.statusMessage)
                         .font(.system(size: 14))
-                        .foregroundColor(.blue)
-                    }
-                    Spacer()
-                        .offset(x: 40)
-                }
-                .padding(.horizontal)
-                .offset(x: 50)
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text("🌡️: \(temp)°C")
-                            .font(.system(size: 30))
-                        Text("💧: \(airHumidity)%")
-                            .font(.system(size: 30))
-                        Text("🪴: \(soilHumidity)%")
-                            .font(.system(size: 30))
-                    }
+                        .foregroundColor(bluetoothManager.isConnected ? .green : .red)
                     
-                    FlowMessage(message: chatRecommendation)
-                        .padding()
-                        .offset(x: 40)
+                    Button("Показать устройства") {
+                        showDeviceList = true
+                    }
+                    .font(.system(size: 14))
+                    .foregroundColor(.blue)
                 }
-                
+                Spacer()
+                    .offset(x: 40)
+            }
+            .padding(.horizontal)
+            .offset(x: 140)
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("🌡️: \(temp)°C")
+                        .font(.system(size: 30))
+                    Text("💧: \(airHumidity)%")
+                        .font(.system(size: 30))
+                    Text("🪴: \(soilHumidity)%")
+                        .font(.system(size: 30))
+                    Text("☀️: \(lightLevel)%")
+                        .font(.system(size: 30))
+                }
+                .offset(y: -50)
+                FlowMessage(message: chatRecommendation)
+                    .padding()
+                    .offset(x: 20, y: 5)
+            }
+            ZStack{
                 Image("Flower")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 400, height: 400)
-                    .offset(x: -25, y: -50)
+                    .frame(width: 400, height: 350)
+                    .offset(x: -15, y: -80)
                     .padding()
-                
-                TextField("Имя цветка", text: $flowerName)
-                    .multilineTextAlignment(.center)
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .padding()
-                    .foregroundColor(.purple)
-                    .offset(y: -150)
-                
-                if chatResponse != "" || isLoading {
-                    HStack {
-                        Image(systemName: "exclamationmark.triangle.text.page")
-                            .foregroundColor(.red)
-                            .font(.system(size: 50))
-                            .offset(y: -150)
-                        if isLoading {
-                            Text("Цветочек думает...")
-                                .foregroundColor(.red)
-                                .font(.system(size: 25))
-                                .offset(y: -150)
-                                .multilineTextAlignment(.center)
-                        } else {
-                            Text(chatResponse)
-                                .lineLimit(nil)
-                                .multilineTextAlignment(.center)
-                                .foregroundColor(.red)
-                                .font(.system(size: 25))
-                                .offset(y: -150)
-                                .frame(maxWidth: 250)
+                    .zIndex(1)
+                ZStack{
+                    Image("Pot")
+                        .offset(y: 123)
+                    if chatResponse != "" || isLoading {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.text.page")
+                                .foregroundColor(.yellow)
+                                .font(.system(size: 50))
+                                .offset(y: 75)
+                            if isLoading {
+                                Text("Цветочек думает...")
+                                    .foregroundColor(.yellow)
+                                    .font(.system(size: 25))
+                                    .offset(y: 100)
+                                    .multilineTextAlignment(.center)
+                                    .foregroundColor(.yellow)
+                            } else {
+                                Text(chatResponse)
+                                    .multilineTextAlignment(.center)
+                                    .foregroundColor(.yellow)
+                                    .font(.system(size: 25))
+                                    .offset(y: 100)
+                                    .frame(maxWidth: 270)
+                                    .foregroundColor(.yellow)
+                            }
                         }
+                        .frame(maxWidth: 200, maxHeight: 300)
                     }
                 }
-                
+            }
+            TextField("Имя цветка", text: $flowerName)
+                .multilineTextAlignment(.center)
+                .font(.title)
+                .fontWeight(.bold)
+                .padding()
+                .foregroundColor(.purple)
+                .offset(y: 60)
+            HStack{
                 Button(
                     action: { fetchChatCompletion() },
                     label: {
-                        Text(" Спросить цветочек ")
+                        Text(" Спросить \n цветочек ")
                             .background(Color.blue)
                             .foregroundStyle(.white)
                             .font(.system(size: 30))
                     })
                 .cornerRadius(20)
-                .frame(width: 500)
-                .offset(y: -100)
+                .frame(width: 500, height: 100)
+                .offset(x: 160, y: 20)
                 
                 Button(
                     action: { showStats = true },
                     label: {
-                        Text(" Статистика цветочка ")
+                        Text(" Статистика \n цветочка ")
                             .background(Color.blue)
                             .foregroundStyle(.white)
                             .font(.system(size: 30))
                     }
                 )
                 .cornerRadius(20)
-                .frame(width: 500)
-                .offset(y: -75)
+                .frame(width: 500, height: 100)
+                .offset(x: -170, y: 20)
             }
             .padding()
             .edgesIgnoringSafeArea(.all)
             .onChange(of: flowerName) { newValue in
                 writeNewName()
             }
-            .sheet(isPresented: $showStats) { StatsModal() }
+            .sheet(isPresented: $showStats) {
+                StatsModal(
+                    bluetoothManager: self.bluetoothManager
+                )
+            }
             .sheet(isPresented: $showDeviceList) {
                 DeviceListView(bluetoothManager: bluetoothManager)
                 
@@ -142,6 +154,7 @@ struct ContentView: View {
                     self.flowerName = readFromFile()
                 }
                 print(deviceName)
+                print(self.lightLevel)
             }
             .onChange(of: bluetoothManager.humidity) { newValue in
                 updateSensorValues()
@@ -149,6 +162,15 @@ struct ContentView: View {
                     self.flowerName = readFromFile()
                 }
                 print(deviceName)
+                print(self.lightLevel)
+            }
+            .onChange(of: bluetoothManager.lightLevel){ newValue in
+                updateSensorValues()
+                if updateDevName() {
+                    self.flowerName = readFromFile()
+                }
+                print(deviceName)
+                print(self.lightLevel)
             }
             .onChange(of: bluetoothManager.soilMoisture) { newValue in
                 updateSensorValues()
@@ -156,6 +178,7 @@ struct ContentView: View {
                     self.flowerName = readFromFile()
                 }
                 print(deviceName)
+                print(self.lightLevel)
             }
             .onChange(of: countEdits) { newValue in
                 writeNewCount()
@@ -175,7 +198,8 @@ struct ContentView: View {
             writeNewData(
                 temp: temp,
                 airHumidity: airHumidity,
-                soilHumidity: soilHumidity
+                soilHumidity: soilHumidity,
+                lightLevel: lightLevel
             )
         }
     }
@@ -184,8 +208,9 @@ struct ContentView: View {
         self.temp = Int(bluetoothManager.temperature)
         self.airHumidity = Int(bluetoothManager.humidity)
         self.soilHumidity = Int(bluetoothManager.soilMoisture)
+        self.lightLevel = Int(bluetoothManager.lightLevel)
         
-        if temp >= 15 && temp <= 25 && airHumidity >= 40 && airHumidity <= 70 && soilHumidity >= 20 && soilHumidity <= 50 {
+        if temp >= 15 && temp <= 25 && airHumidity >= 40 && airHumidity <= 70 && soilHumidity >= 20 && soilHumidity <= 50 && lightLevel >= 20 && lightLevel <= 80 {
             chatRecommendation = "Все хорошо!"
         } else {
             chatRecommendation = "Спаси меня!"
@@ -194,7 +219,8 @@ struct ContentView: View {
         writeNewData(
             temp: temp,
             airHumidity: airHumidity,
-            soilHumidity: soilHumidity
+            soilHumidity: soilHumidity,
+            lightLevel: lightLevel
         )
     }
     
@@ -218,7 +244,7 @@ struct ContentView: View {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer TOKEN", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer Token", forHTTPHeaderField: "Authorization")
         
         let body: [String: Any] = [
             "stream": false,
@@ -226,7 +252,7 @@ struct ContentView: View {
             "messages": [
                 [
                     "role": "user",
-                    "content": "Дай очень краткий ответ, пожалуйста. Если цветку все хорошо, обратившись к пользователю от имени цветка \(flowerName) без обращения к нему, от имени цветка, не предлагай варианты с изменением местоположения цветка, а только к его состоянию: Что нужно цветку \"\(flowerName)\", который стоит в комнате при температуре \(temp)°C, влажности воздуха \(airHumidity)% и влажности почвы \(soilHumidity)%?; ответь непринужденно и шуточно."
+                    "content": "Ответь, как можно короче, пожалуйста(не более 15 слов). Если цветку все хорошо, обратившись к пользователю от имени цветка \(flowerName) без обращения к нему, от имени цветка, не предлагай варианты с изменением местоположения цветка, а только к его состоянию: Что нужно цветку \"\(flowerName)\", который стоит в комнате при температуре \(temp)°C, влажности воздуха \(airHumidity)%, освещенности \(self.lightLevel)% и влажности почвы \(soilHumidity)%?; ответь непринужденно и шуточно."
                 ]
             ]
         ]
@@ -342,9 +368,9 @@ struct ContentView: View {
         }
     }
     
-    func writeNewData(temp: Int, airHumidity: Int, soilHumidity: Int) {
+    func writeNewData(temp: Int, airHumidity: Int, soilHumidity: Int, lightLevel: Int) {
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let addString = "\(temp), \(airHumidity), \(soilHumidity)\n"
+        let addString = "\(temp), \(airHumidity), \(soilHumidity), \(lightLevel)\n"
         let fileURL = documentsURL.appendingPathComponent(self.deviceName + "FlowerData.txt")
         
         if let fileHandle = try? FileHandle(forWritingTo: fileURL) {
@@ -367,6 +393,7 @@ struct ContentView: View {
         var sum_temp: Int = 0
         var sum_airHumidity: Int = 0
         var sum_soilHumidity: Int = 0
+        var sum_lightLevel: Int = 0
         var dataArray: [String] = []
         
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -381,29 +408,33 @@ struct ContentView: View {
             let data = try String(contentsOf: fileURL, encoding: .utf8)
             dataArray = data.split(separator: "\n").map(String.init)
             
-            if dataArray.count < 10 {
+            if dataArray.count < 100 {
                 print("Not enough data to shrink.")
                 return
             }
 
-            for i in dataArray[dataArray.count - 10..<dataArray.count] {
+            for i in dataArray[dataArray.count - 100..<dataArray.count] {
                 let components = i.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-                if components.count == 3,
+                if components.count == 4,
                    let tempValue = Int(components[0]),
                    let airHumidityValue = Int(components[1]),
-                   let soilHumidityValue = Int(components[2]) {
+                   let soilHumidityValue = Int(components[2]),
+                   let lightLevelValue = Int(components[3])
+                {
                     sum_temp += tempValue
                     sum_airHumidity += airHumidityValue
                     sum_soilHumidity += soilHumidityValue
+                    sum_lightLevel += lightLevelValue
                 }
             }
 
-            let average_temp: Int = sum_temp / 10
-            let average_airHumidity: Int = sum_airHumidity / 10
-            let average_soilHumidity: Int = sum_soilHumidity / 10
+            let average_temp: Int = sum_temp / 100
+            let average_airHumidity: Int = sum_airHumidity / 100
+            let average_soilHumidity: Int = sum_soilHumidity / 100
+            let average_lightLevel: Int = sum_lightLevel / 100
 
-            print("Average Temp: \(average_temp), Average Air Humidity: \(average_airHumidity), Average Soil Humidity: \(average_soilHumidity)")
-            let addString = "\(average_temp), \(average_airHumidity), \(average_soilHumidity)\n"
+            print("Average Temp: \(average_temp), Average Air Humidity: \(average_airHumidity), Average Soil Humidity: \(average_soilHumidity), Average Light Level: \(average_lightLevel)")
+            let addString = "\(average_temp), \(average_airHumidity), \(average_soilHumidity), \(average_lightLevel)\n"
             
             try "".write(to: fileURL, atomically: true, encoding: .utf8)
             
