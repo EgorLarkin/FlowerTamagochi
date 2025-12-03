@@ -153,6 +153,9 @@ struct ContentView: View {
                 if updateDevName() {
                     self.flowerName = readFromFile()
                 }
+                if !bluetoothManager.isConnected {
+                    deviceName = ""
+                }
                 print(deviceName)
                 print(self.lightLevel)
             }
@@ -160,6 +163,9 @@ struct ContentView: View {
                 updateSensorValues()
                 if updateDevName() {
                     self.flowerName = readFromFile()
+                }
+                if !bluetoothManager.isConnected {
+                    deviceName = ""
                 }
                 print(deviceName)
                 print(self.lightLevel)
@@ -169,6 +175,9 @@ struct ContentView: View {
                 if updateDevName() {
                     self.flowerName = readFromFile()
                 }
+                if !bluetoothManager.isConnected {
+                    deviceName = ""
+                }
                 print(deviceName)
                 print(self.lightLevel)
             }
@@ -176,6 +185,9 @@ struct ContentView: View {
                 updateSensorValues()
                 if updateDevName() {
                     self.flowerName = readFromFile()
+                }
+                if !bluetoothManager.isConnected {
+                    deviceName = ""
                 }
                 print(deviceName)
                 print(self.lightLevel)
@@ -244,7 +256,7 @@ struct ContentView: View {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer Token", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer TOKEN", forHTTPHeaderField: "Authorization")
         
         let body: [String: Any] = [
             "stream": false,
@@ -369,6 +381,9 @@ struct ContentView: View {
     }
     
     func writeNewData(temp: Int, airHumidity: Int, soilHumidity: Int, lightLevel: Int) {
+        if !bluetoothManager.isConnected {
+            return
+        }
         let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let addString = "\(temp), \(airHumidity), \(soilHumidity), \(lightLevel)\n"
         let fileURL = documentsURL.appendingPathComponent(self.deviceName + "FlowerData.txt")
@@ -408,12 +423,12 @@ struct ContentView: View {
             let data = try String(contentsOf: fileURL, encoding: .utf8)
             dataArray = data.split(separator: "\n").map(String.init)
             
-            if dataArray.count < 100 {
+            if dataArray.count < 10000 {
                 print("Not enough data to shrink.")
                 return
             }
 
-            for i in dataArray[dataArray.count - 100..<dataArray.count] {
+            for i in dataArray[dataArray.count - 10000..<dataArray.count] {
                 let components = i.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
                 if components.count == 4,
                    let tempValue = Int(components[0]),
@@ -428,10 +443,10 @@ struct ContentView: View {
                 }
             }
 
-            let average_temp: Int = sum_temp / 100
-            let average_airHumidity: Int = sum_airHumidity / 100
-            let average_soilHumidity: Int = sum_soilHumidity / 100
-            let average_lightLevel: Int = sum_lightLevel / 100
+            let average_temp: Int = sum_temp / 10000
+            let average_airHumidity: Int = sum_airHumidity / 10000
+            let average_soilHumidity: Int = sum_soilHumidity / 10000
+            let average_lightLevel: Int = sum_lightLevel / 10000
 
             print("Average Temp: \(average_temp), Average Air Humidity: \(average_airHumidity), Average Soil Humidity: \(average_soilHumidity), Average Light Level: \(average_lightLevel)")
             let addString = "\(average_temp), \(average_airHumidity), \(average_soilHumidity), \(average_lightLevel)\n"
