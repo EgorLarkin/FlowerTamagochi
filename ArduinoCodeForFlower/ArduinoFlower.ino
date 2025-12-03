@@ -9,10 +9,11 @@
 
 // Пин для датчика DHT
 #define DHT_PIN 22
-#define DHT_TYPE DHT22   // или DHT22, в зависимости от вашего датчика
+#define DHT_TYPE DHT22          // Пин для датчика влажности почвы (аналоговый)
+#define LIGHT_SENSOR_PIN 25 // или DHT22, в зависимости от вашего датчика
 
 // Пин для датчика влажности почвы
-#define SOIL_MOISTURE_PIN A0
+#define SOIL_MOISTURE_PIN 34
 
 BLEServer *pServer = NULL;
 BLECharacteristic *pCharacteristic = NULL;
@@ -130,6 +131,15 @@ void setup() {
   Serial.println("Имя устройства: ESP32_Sensor_Server");
 }
 
+String readLightData(){
+  int sensorValue = analogRead(LIGHT_SENSOR_PIN);
+  int moisturePercent = map(sensorValue, 4095, 200, 0, 100);
+  moisturePercent = constrain(moisturePercent, 0, 100);
+  
+  String data = "Свет: " + String(moisturePercent) + "%";
+  return data;
+}
+
 void loop() {
   // Обработка подключения/отключения
   if (deviceConnected && !oldDeviceConnected) {
@@ -152,9 +162,10 @@ void loop() {
       // Чтение данных с датчиков
       String dhtData = readDHTData();
       String soilData = readSoilMoisture();
+      String lightData = readLightData();
       
       // Формирование общего сообщения
-      String message = dhtData + " | " + soilData;
+      String message = dhtData + " | " + soilData + " | " + lightData;
       
       // Отправка по BLE
       pCharacteristic->setValue(message.c_str());
