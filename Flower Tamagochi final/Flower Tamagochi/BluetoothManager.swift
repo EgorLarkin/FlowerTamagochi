@@ -1,3 +1,10 @@
+//
+//  BluetoothManager 2.swift
+//  Flower Tamagochi
+//
+//  Created by Сергей Ларкин on 24/11/2025.
+//
+
 import Foundation
 import CoreBluetooth
 import Combine
@@ -20,6 +27,7 @@ class BluetoothManager: NSObject, ObservableObject {
     @Published var temperature: Float = 0.0
     @Published var humidity: Float = 0.0
     @Published var soilMoisture: Float = 0.0
+    @Published var lightLevel: Float = 0.0
     
     override init() {
         super.init()
@@ -71,6 +79,7 @@ class BluetoothManager: NSObject, ObservableObject {
         var newTemperature: Float = 0.0
         var newHumidity: Float = 0.0
         var newSoilMoisture: Float = 0.0
+        var newLightLevel: Float = 0.0
         
         // Пример формата: "Темп: 23.5°C, Влаж: 45.0% | Почва: 65%"
         
@@ -122,11 +131,27 @@ class BluetoothManager: NSObject, ObservableObject {
             }
         }
         
+        if parts.count > 1 {
+            let lightPart = parts[2]
+            print(lightPart.range(of: "Свет: "))
+            if let lightRange = lightPart.range(of: "Свет: ") {
+                let lightSubstring = lightPart[lightRange.upperBound...]
+                if let percentRange = lightSubstring.range(of: "%") {
+                    let lightString = String(lightSubstring[..<percentRange.lowerBound]).trimmingCharacters(in: .whitespaces)
+                    if let lightValue = Float(lightString) {
+                        newLightLevel = lightValue
+                        print("Уровень освещенности: \(newLightLevel)%")
+                    }
+                }
+            }
+        }
+        
         // Обновляем значения на главном потоке
         DispatchQueue.main.async {
             self.temperature = newTemperature
             self.humidity = newHumidity
             self.soilMoisture = newSoilMoisture
+            self.lightLevel = newLightLevel
         }
     }
     
