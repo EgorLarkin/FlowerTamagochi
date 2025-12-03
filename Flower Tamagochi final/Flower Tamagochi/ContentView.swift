@@ -256,7 +256,7 @@ struct ContentView: View {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer TOKEN", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer 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", forHTTPHeaderField: "Authorization")
         
         let body: [String: Any] = [
             "stream": false,
