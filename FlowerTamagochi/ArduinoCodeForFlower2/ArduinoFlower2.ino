@@ -128,7 +128,7 @@ void setup() {
   BLEDevice::startAdvertising();
   
   Serial.println("Сервер запущен. Ожидание подключения...");
-  Serial.println("Имя устройства: ESP32_Sensor_Server");
+  Serial.println("Имя устройства: ESP32_Sensor_Server2");
 }
 
 String readLightData(){
