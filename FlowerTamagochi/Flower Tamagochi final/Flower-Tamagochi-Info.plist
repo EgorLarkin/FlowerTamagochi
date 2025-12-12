@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+		</dict>
+	</array>
+    
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>Приложение использует Bluetooth для подключения к устройству мониторинга растений</string>
+    
+    <key>NSBluetoothPeripheralUsageDescription</key>
+    <string>Приложение использует Bluetooth для подключения к устройству мониторинга растений</string>
+    
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>bluetooth-central</string>
+        <string>bluetooth-peripheral</string>
+    </array>
+    
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>Приложение подключается к Bluetooth-устройству для мониторинга состояния растений</string>
+    
+    <key>NSBluetoothPeripheralUsageDescription</key>
+    <string>Приложение подключается к Bluetooth-устройству для мониторинга состояния растений</string>
+</dict>
+</plist>
