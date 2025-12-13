@@ -313,7 +313,7 @@ struct ContentView: View {
         self.soilHumidity = Int(bluetoothManager.soilMoisture)
         self.lightLevel = Int(bluetoothManager.lightLevel)
 
-        if temp >= 15 && temp <= 25 && airHumidity >= 40 && airHumidity <= 70 && soilHumidity >= 20 && soilHumidity <= 50 && lightLevel >= 20 && lightLevel <= 80 {
+        if temp >= 15 && temp <= 30 && airHumidity >= 20 && airHumidity <= 50 && soilHumidity >= 20 && soilHumidity <= 80 && lightLevel >= 20 && lightLevel <= 80 {
             chatRecommendation = "Все хорошо!"
             self.isCrying = false
         } else {
