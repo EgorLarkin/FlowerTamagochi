@@ -284,7 +284,7 @@ struct ChatView: View {
         .navigationTitle("Чат с цветком")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { viewModel.loadChatHistory() }
-        .onDisappear { viewModel.saveChatHistory() }
+        .onDisappear { viewModel.clearChatHistory() }
         .onChange(of: bluetoothManager.isConnected) { _, newValue in
             if !newValue {
                 dismiss()
