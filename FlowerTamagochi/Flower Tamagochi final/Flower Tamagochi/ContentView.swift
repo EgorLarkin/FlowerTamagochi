@@ -294,7 +294,7 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Logic helpers (no algorithm changes)
+    // MARK: - Logic helpers
     private func sensorDrivenUpdate() {
         updateSensorValues()
 
