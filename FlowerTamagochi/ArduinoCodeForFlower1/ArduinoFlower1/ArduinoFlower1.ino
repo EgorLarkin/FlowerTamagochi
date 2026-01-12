@@ -24,19 +24,78 @@ class SensorManager {
 private:
     DHT dht;
     
-    // Калибровочные значения для сенсоров
-    static constexpr int SOIL_MIN_RAW = 4095;
-    static constexpr int SOIL_MAX_RAW = 1500;
-    static constexpr int LIGHT_MIN_RAW = 4095;
-    static constexpr int LIGHT_MAX_RAW = 200;
+    // Динамические калибровочные значения для сенсоров
+    int SOIL_DRY_VALUE = 3900;   // Сухая почва (воздух) - будет обновляться
+    int SOIL_WET_VALUE = 1500;   // Влажная почва (вода) - будет обновляться
+    
+    static constexpr int LIGHT_MIN_RAW = 4095;    // Темнота
+    static constexpr int LIGHT_MAX_RAW = 200;     // Яркий свет
+    
+    // Для усреднения показаний
+    static constexpr int SOIL_AVERAGE_COUNT = 10;
+    int soilReadings[SOIL_AVERAGE_COUNT];
+    int soilIndex = 0;
+    
+    // Для динамической калибровки
+    int soilMinValue = 4096;  // Минимальное зарегистрированное значение
+    int soilMaxValue = 0;     // Максимальное зарегистрированное значение
+    unsigned long lastCalibrationTime = 0;
+    const unsigned long CALIBRATION_INTERVAL = 60000; // Калибровка каждые 60 секунд
     
 public:
-    SensorManager() : dht(DHT_PIN, DHT_TYPE) {}
+    SensorManager() : dht(DHT_PIN, DHT_TYPE) {
+        // Инициализация массива для усреднения
+        for (int i = 0; i < SOIL_AVERAGE_COUNT; i++) {
+            soilReadings[i] = 0;
+        }
+    }
     
     void begin() {
         dht.begin();
         pinMode(SOIL_MOISTURE_PIN, INPUT);
         pinMode(LIGHT_SENSOR_PIN, INPUT);
+        
+        // Настройка АЦП для более точных измерений
+        analogReadResolution(12);  // 12 бит (0-4095)
+        analogSetAttenuation(ADC_11db);  // Диапазон 0-3.3V
+        
+        // Загрузка сохранённых калибровочных значений
+        loadCalibration();
+    }
+    
+    void loadCalibration() {
+        Preferences prefs;
+        prefs.begin("soil_calib", true);  // Режим чтения
+        
+        SOIL_DRY_VALUE = prefs.getInt("dry", 3900);
+        SOIL_WET_VALUE = prefs.getInt("wet", 1500);
+        soilMinValue = prefs.getInt("min", 4096);
+        soilMaxValue = prefs.getInt("max", 0);
+        
+        prefs.end();
+        
+        Serial.print("Загружены калибровочные значения: сухо=");
+        Serial.print(SOIL_DRY_VALUE);
+        Serial.print(", влажно=");
+        Serial.print(SOIL_WET_VALUE);
+        Serial.print(", min=");
+        Serial.print(soilMinValue);
+        Serial.print(", max=");
+        Serial.println(soilMaxValue);
+    }
+    
+    void saveCalibration() {
+        Preferences prefs;
+        prefs.begin("soil_calib", false);  // Режим записи
+        
+        prefs.putInt("dry", SOIL_DRY_VALUE);
+        prefs.putInt("wet", SOIL_WET_VALUE);
+        prefs.putInt("min", soilMinValue);
+        prefs.putInt("max", soilMaxValue);
+        
+        prefs.end();
+        
+        Serial.println("Калибровочные значения сохранены");
     }
     
     float readTemperature() {
@@ -50,15 +109,208 @@ public:
     }
     
     int readSoilMoisture() {
-        int sensorValue = analogRead(SOIL_MOISTURE_PIN);
-        int moisturePercent = map(sensorValue, SOIL_MIN_RAW, SOIL_MAX_RAW, 0, 100);
-        return constrain(moisturePercent, 0, 100);
+        // Читаем несколько раз и усредняем
+        int sensorValue = 0;
+        for (int i = 0; i < 10; i++) {
+            sensorValue += analogRead(SOIL_MOISTURE_PIN);
+            delay(1);
+        }
+        sensorValue = sensorValue / 10;
+        
+        // Обновляем динамические min/max значения
+        updateDynamicCalibration(sensorValue);
+        
+        // Сохраняем в массив для скользящего среднего
+        soilReadings[soilIndex] = sensorValue;
+        soilIndex = (soilIndex + 1) % SOIL_AVERAGE_COUNT;
+        
+        // Вычисляем среднее
+        int avgValue = 0;
+        for (int i = 0; i < SOIL_AVERAGE_COUNT; i++) {
+            avgValue += soilReadings[i];
+        }
+        avgValue = avgValue / SOIL_AVERAGE_COUNT;
+        
+        // Отладочная информация
+        Serial.print("Сырое значение датчика почвы: ");
+        Serial.print(sensorValue);
+        Serial.print(" (среднее: ");
+        Serial.print(avgValue);
+        Serial.print(", min=");
+        Serial.print(soilMinValue);
+        Serial.print(", max=");
+        Serial.print(soilMaxValue);
+        Serial.print(")");
+        
+        // Используем динамические значения для калибровки, если они есть
+        int calibrationDry = SOIL_DRY_VALUE;
+        int calibrationWet = SOIL_WET_VALUE;
+        
+        // Если у нас есть реальные min/max значения, используем их
+        if (soilMaxValue - soilMinValue > 500) {  // Достаточный диапазон
+            calibrationDry = soilMaxValue;
+            calibrationWet = soilMinValue;
+        }
+        
+        int moisturePercent;
+        if (calibrationWet < calibrationDry) {
+            // Нормальная калибровка (влажная почва = меньшее значение)
+            moisturePercent = map(avgValue, calibrationWet, calibrationDry, 100, 0);
+        } else {
+            // Инвертированная калибровка (влажная почва = большее значение)
+            moisturePercent = map(avgValue, calibrationDry, calibrationWet, 0, 100);
+        }
+        
+        // Дополнительная проверка и ограничение
+        moisturePercent = constrain(moisturePercent, 0, 100);
+        
+        Serial.print(" -> Калиброванное: ");
+        Serial.print(moisturePercent);
+        Serial.println("%");
+        
+        return moisturePercent;
+    }
+    
+    void updateDynamicCalibration(int rawValue) {
+        // Обновляем min/max значения
+        if (rawValue < soilMinValue) {
+            soilMinValue = rawValue;
+        }
+        if (rawValue > soilMaxValue) {
+            soilMaxValue = rawValue;
+        }
+        
+        // Периодическое сохранение калибровочных значений
+        unsigned long currentTime = millis();
+        if (currentTime - lastCalibrationTime > CALIBRATION_INTERVAL) {
+            // Устанавливаем калибровочные значения на основе реальных измерений
+            // с небольшим запасом
+            SOIL_WET_VALUE = soilMinValue - 100;  // Добавляем запас
+            SOIL_DRY_VALUE = soilMaxValue + 100;  // Добавляем запас
+            
+            // Защита от выхода за пределы
+            SOIL_WET_VALUE = constrain(SOIL_WET_VALUE, 0, 4095);
+            SOIL_DRY_VALUE = constrain(SOIL_DRY_VALUE, 0, 4095);
+            
+            // Сохраняем в память
+            saveCalibration();
+            
+            lastCalibrationTime = currentTime;
+            
+            Serial.println("Динамическая калибровка обновлена");
+        }
     }
     
     int readLightLevel() {
         int sensorValue = analogRead(LIGHT_SENSOR_PIN);
+        
+        // Отладочная информация
+        Serial.print("Свет: raw=");
+        Serial.print(sensorValue);
+        
         int lightPercent = map(sensorValue, LIGHT_MIN_RAW, LIGHT_MAX_RAW, 0, 100);
-        return constrain(lightPercent, 0, 100);
+        lightPercent = constrain(lightPercent, 0, 100);
+        
+        Serial.print(" -> ");
+        Serial.print(lightPercent);
+        Serial.println("%");
+        
+        return lightPercent;
+    }
+    
+    // Функция для ручной калибровки датчика почвы
+    void calibrateSoilSensor() {
+        Serial.println("\n=== КАЛИБРОВКА ДАТЧИКА ВЛАЖНОСТИ ПОЧВЫ ===");
+        Serial.println("1. Поместите датчик в СУХУЮ почву или воздух");
+        Serial.println("   и нажмите любую клавишу...");
+        while (!Serial.available());
+        Serial.read();
+        delay(100);
+        
+        int dryValue = 0;
+        for (int i = 0; i < 30; i++) {
+            dryValue += analogRead(SOIL_MOISTURE_PIN);
+            Serial.print(".");
+            delay(100);
+        }
+        dryValue = dryValue / 30;
+        Serial.println();
+        Serial.print("   Среднее значение в сухой среде: ");
+        Serial.println(dryValue);
+        
+        Serial.println("\n2. Поместите датчик в ВОДУ или ОЧЕНЬ ВЛАЖНУЮ почву");
+        Serial.println("   и нажмите любую клавишу...");
+        while (!Serial.available());
+        Serial.read();
+        delay(100);
+        
+        int wetValue = 0;
+        for (int i = 0; i < 30; i++) {
+            wetValue += analogRead(SOIL_MOISTURE_PIN);
+            Serial.print(".");
+            delay(100);
+        }
+        wetValue = wetValue / 30;
+        Serial.println();
+        Serial.print("   Среднее значение в воде: ");
+        Serial.println(wetValue);
+        
+        Serial.println("\n=== РЕЗУЛЬТАТЫ КАЛИБРОВКИ ===");
+        Serial.print("Сырое сухое значение: ");
+        Serial.println(dryValue);
+        Serial.print("Сырое влажное значение: ");
+        Serial.println(wetValue);
+        
+        // Определяем тип датчика и устанавливаем значения
+        if (wetValue < dryValue) {
+            Serial.println("Тип датчика: НОРМАЛЬНЫЙ (вода = меньшее значение)");
+            SOIL_DRY_VALUE = dryValue;
+            SOIL_WET_VALUE = wetValue;
+        } else {
+            Serial.println("Тип датчика: ИНВЕРТИРОВАННЫЙ (вода = большее значение)");
+            SOIL_DRY_VALUE = wetValue;
+            SOIL_WET_VALUE = dryValue;
+        }
+        
+        // Сбрасываем динамические значения
+        soilMinValue = SOIL_WET_VALUE;
+        soilMaxValue = SOIL_DRY_VALUE;
+        
+        // Сохраняем калибровочные значения
+        saveCalibration();
+        
+        Serial.println("=== КАЛИБРОВКА ЗАВЕРШЕНА ===");
+        Serial.print("SOIL_DRY_VALUE = ");
+        Serial.println(SOIL_DRY_VALUE);
+        Serial.print("SOIL_WET_VALUE = ");
+        Serial.println(SOIL_WET_VALUE);
+        
+        // Тестовое чтение после калибровки
+        Serial.println("\nТестовое чтение после калибровки:");
+        for (int i = 0; i < 5; i++) {
+            int testValue = readSoilMoisture();
+            Serial.print("Тест ");
+            Serial.print(i + 1);
+            Serial.print(": ");
+            Serial.print(testValue);
+            Serial.println("%");
+            delay(1000);
+        }
+    }
+    
+    // Тестовая функция для проверки сырых значений
+    void testRawValues() {
+        Serial.println("\n=== ТЕСТ СЫРЫХ ЗНАЧЕНИЙ ===");
+        Serial.println("Измеряем сырые значения без калибровки:");
+        
+        for (int i = 0; i < 10; i++) {
+            int rawValue = analogRead(SOIL_MOISTURE_PIN);
+            Serial.print("Измерение ");
+            Serial.print(i + 1);
+            Serial.print(": ");
+            Serial.println(rawValue);
+            delay(500);
+        }
     }
     
     bool areReadingsValid(float temp, float hum, int soil, int light) {
@@ -116,7 +368,6 @@ public:
         int index = preferences.getInt("data_index", 0);
         int count = preferences.getInt("data_count", 0);
         
-        // Сохраняем данные
         String key = "data_" + String(index);
         String value = String(data.temperature, 1) + "," + 
                        String(data.humidity, 1) + "," + 
@@ -126,7 +377,6 @@ public:
         
         preferences.putString(key.c_str(), value);
         
-        // Обновляем индексы
         index = (index + 1) % MAX_DATA_POINTS;
         preferences.putInt("data_index", index);
         
@@ -141,9 +391,7 @@ public:
         int count = preferences.getInt("data_count", 0);
         int index = preferences.getInt("data_index", 0);
         
-        if (count == 0) {
-            return "";
-        }
+        if (count == 0) return "";
         
         String allData = "";
         int startIndex = (count == MAX_DATA_POINTS) ? index : 0;
@@ -154,10 +402,7 @@ public:
             String value = preferences.getString(key.c_str(), "");
             
             if (value.length() > 0) {
-                if (allData.length() > 0) {
-                    allData += "\n";
-                }
-                // Убираем timestamp для отправки
+                if (allData.length() > 0) allData += "\n";
                 int lastComma = value.lastIndexOf(',');
                 allData += value.substring(0, lastComma);
             }
@@ -189,14 +434,9 @@ public:
     
     void setup(const char* deviceName) {
         BLEDevice::init(deviceName);
-        
-        // Создание сервера
         pServer = BLEDevice::createServer();
-        
-        // Создание сервиса
         BLEService* pService = pServer->createService(SERVICE_UUID);
         
-        // Создание характеристики
         pCharacteristic = pService->createCharacteristic(
             CHARACTERISTIC_UUID,
             BLECharacteristic::PROPERTY_READ |
@@ -206,8 +446,12 @@ public:
         pCharacteristic->setValue("ready");
         pService->start();
         
-        // Настройка advertising
-        setupAdvertising();
+        BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
+        pAdvertising->addServiceUUID(SERVICE_UUID);
+        pAdvertising->setScanResponse(true);
+        pAdvertising->setMinPreferred(0x06);
+        pAdvertising->setMinPreferred(0x12);
+        BLEDevice::startAdvertising();
         
         Serial.println("BLE сервер запущен. Имя: " + String(deviceName));
     }
@@ -227,8 +471,8 @@ public:
     
     void updateConnectionStatus() {
         if (!deviceConnected && oldDeviceConnected) {
-            delay(500); // Даем время для завершения отключения
-            pServer->startAdvertising();
+            delay(500);
+            BLEDevice::startAdvertising();
             oldDeviceConnected = deviceConnected;
         }
         
@@ -244,16 +488,6 @@ public:
     bool isConnected() const {
         return deviceConnected;
     }
-    
-private:
-    void setupAdvertising() {
-        BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
-        pAdvertising->addServiceUUID(SERVICE_UUID);
-        pAdvertising->setScanResponse(true);
-        pAdvertising->setMinPreferred(0x06);
-        pAdvertising->setMinPreferred(0x12);
-        BLEDevice::startAdvertising();
-    }
 };
 
 // Глобальные экземпляры
@@ -261,74 +495,130 @@ SensorManager sensorManager;
 DataStorage dataStorage;
 BLESensorServer bleServer;
 
-// Callback класс
 class ServerCallbacks : public BLEServerCallbacks {
-    void onConnect(BLEServer* pServer) override {
+    void onConnect(BLEServer* pServer) {
         bleServer.setConnected(true);
         Serial.println("Устройство подключено");
         
-        // Получаем и отправляем все сохраненные данные
+        // Отправляем все сохранённые данные при подключении
+        dataStorage.begin();
         String allData = dataStorage.getAllStoredData();
         if (allData.length() > 0) {
             Serial.println("Отправка " + String(dataStorage.getStoredCount()) + " записей...");
             bleServer.sendData(allData);
-            
-            // Очищаем после успешной отправки
             dataStorage.clearAllData();
         }
+        dataStorage.end();
     }
 
-    void onDisconnect(BLEServer* pServer) override {
+    void onDisconnect(BLEServer* pServer) {
         bleServer.setConnected(false);
         Serial.println("Устройство отключено");
     }
 };
 
+void printHelp() {
+    Serial.println("\n=== КОМАНДЫ МОНИТОРА ПОРТА ===");
+    Serial.println("c - Калибровка датчика влажности почвы");
+    Serial.println("t - Тест сырых значений датчика почвы");
+    Serial.println("r - Сброс динамической калибровки");
+    Serial.println("h - Вывод этого сообщения");
+    Serial.println("s - Статус системы");
+    Serial.println("============================\n");
+}
+
 void setup() {
     Serial.begin(115200);
-    Serial.println("Инициализация системы...");
+    Serial.println("\n=== ИНИЦИАЛИЗАЦИЯ СИСТЕМЫ ДАТЧИКОВ ESP32 ===");
     
-    // Инициализация сенсоров
+    // Запуск сенсоров
     sensorManager.begin();
     
-    // Инициализация хранилища
+    // Инициализация хранилища данных
     dataStorage.begin();
     Serial.println("Загружено " + String(dataStorage.getStoredCount()) + " записей");
     dataStorage.end();
     
-    // Настройка BLE сервера
-    bleServer.setup("ESP32_Sensor_Server");
+    // Настройка BLE
+    bleServer.setup("ESP32_Sensor_Server_2");
     bleServer.setCallbacks(new ServerCallbacks());
     
-    Serial.println("Система готова. Формат данных: температура, влажность, почва, свет");
+    // Вывод справки по командам
+    printHelp();
+    
+    // Автоматическая проверка датчика почвы при запуске
+    Serial.println("Автоматическая проверка датчика почвы...");
+    sensorManager.testRawValues();
+    
+    Serial.println("\nСистема готова.");
+    Serial.println("Формат данных: температура, влажность, почва, свет");
+    Serial.println("============================================\n");
 }
 
 void loop() {
     static unsigned long lastReadTime = 0;
+    static unsigned long lastStatusTime = 0;
     unsigned long currentTime = millis();
+    
+    // Обработка команд из монитора порта
+    if (Serial.available()) {
+        char cmd = Serial.read();
+        switch (cmd) {
+            case 'c':
+            case 'C':
+                sensorManager.calibrateSoilSensor();
+                break;
+                
+            case 't':
+            case 'T':
+                sensorManager.testRawValues();
+                break;
+                
+            case 'r':
+            case 'R':
+                Serial.println("Сброс динамической калибровки...");
+                // Сброс значений
+                sensorManager.loadCalibration();
+                break;
+                
+            case 'h':
+            case 'H':
+                printHelp();
+                break;
+                
+            case 's':
+            case 'S':
+                Serial.println("\n=== СТАТУС СИСТЕМЫ ===");
+                Serial.println("BLE подключен: " + String(bleServer.isConnected() ? "Да" : "Нет"));
+                dataStorage.begin();
+                Serial.println("Сохранено записей: " + String(dataStorage.getStoredCount()));
+                dataStorage.end();
+                Serial.println("Время работы: " + String(currentTime / 1000) + " сек");
+                Serial.println("======================\n");
+                break;
+        }
+    }
     
     // Обновление статуса соединения BLE
     bleServer.updateConnectionStatus();
     
-    // Периодический сбор данных
+    // Основной цикл считывания данных с сенсоров
     if (currentTime - lastReadTime >= DATA_READ_INTERVAL) {
-        // Чтение данных с датчиков
         float temperature = sensorManager.readTemperature();
         float humidity = sensorManager.readHumidity();
         int soilMoisture = sensorManager.readSoilMoisture();
         int lightLevel = sensorManager.readLightLevel();
         
-        // Проверка корректности данных
         if (sensorManager.areReadingsValid(temperature, humidity, soilMoisture, lightLevel)) {
             String displayMessage = sensorManager.formatForDisplay(
                 temperature, humidity, soilMoisture, lightLevel);
             
+            // Отправка данных через BLE или сохранение в память
             if (bleServer.isConnected()) {
-                // Отправка по BLE
                 bleServer.sendData(displayMessage);
                 Serial.println("Отправлено (BLE): " + displayMessage);
             } else {
-                // Сохранение в память
+                // Сохраняем в память для последующей отправки
                 DataStorage::SensorData data = {
                     temperature,
                     humidity,
@@ -340,13 +630,32 @@ void loop() {
                 dataStorage.begin();
                 dataStorage.saveData(data);
                 dataStorage.end();
+                
+                Serial.println("Сохранено (локально): " + displayMessage);
             }
         } else {
             Serial.println("Ошибка чтения данных с датчиков");
+            
+            // Детальная диагностика
+            Serial.print("Проверка значений: ");
+            Serial.print("Темп=");
+            Serial.print(temperature);
+            Serial.print(", Влаж=");
+            Serial.print(humidity);
+            Serial.print(", Почва=");
+            Serial.print(soilMoisture);
+            Serial.print(", Свет=");
+            Serial.println(lightLevel);
         }
         
         lastReadTime = currentTime;
     }
     
-    delay(100); // Небольшая задержка для стабильности
+    // Периодический вывод статуса
+    if (currentTime - lastStatusTime > 30000) {  // Каждые 30 секунд
+        Serial.print(".");
+        lastStatusTime = currentTime;
+    }
+    
+    delay(100);
 }
